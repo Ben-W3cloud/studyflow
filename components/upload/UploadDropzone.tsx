@@ -72,7 +72,7 @@ export function UploadDropzone({ onUpload }: UploadDropzoneProps) {
         <input
           ref={inputRef}
           type="file"
-          accept=".pdf,.txt,.md,.doc,.docx,application/pdf,text/plain"
+          accept=".pdf,.txt,.md,application/pdf,text/plain,text/markdown"
           className="sr-only"
           aria-label="Upload study material"
           onChange={(event) => handleFiles(event.target.files)}

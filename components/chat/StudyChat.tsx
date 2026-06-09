@@ -1,8 +1,11 @@
 "use client";
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { BookOpen } from 'lucide-react';
+import { toast } from 'sonner';
 import { ChatMessage } from '../../lib/types';
+import { uploadResponseSchema } from '../../lib/validation';
+import { useStudyStore } from '../../store/study-store';
 import { Message } from './Message';
 import { ChatInput } from './ChatInput';
 import { ModeSelector } from './ModeSelector';
@@ -15,88 +18,119 @@ import { EmptyState } from './EmptyState';
 
 type AppPhase = 'landing' | 'analyzing' | 'mode' | 'workspace';
 
-const assistantResponses: Record<string, string> = {
-  summary: `# Quick Study Summary
-
-The material centers on a small set of ideas that connect into a larger argument. Start by identifying the core terms, then trace how each definition supports the examples that follow.
-
-## Key Concepts
-
-- **Foundational definitions:** the vocabulary you need before the rest of the material becomes easier to read.
-- **Main relationships:** how each idea influences or depends on another.
-- **Likely exam focus:** concepts that are repeated, contrasted, or applied in examples.
-
-> A useful revision method is to turn each heading into a question, then answer it without looking at the source.
-
-| Study Focus | What To Do |
-| --- | --- |
-| Definitions | Write concise one-line explanations |
-| Examples | Explain why each example fits the concept |
-| Gaps | Mark anything you cannot teach back clearly |`,
-  detailed: `# Detailed Learning Report
-
-This topic is best understood as a layered explanation. The first layer is terminology, the second is structure, and the third is application.
-
-## Background Context
-
-Before memorizing details, look for the reason the topic exists. Most academic material is answering a problem: a gap in understanding, a practical challenge, or a pattern that needs explanation.
-
-## Core Explanation
-
-1. Define the essential terms.
-2. Group related ideas into categories.
-3. Compare the categories using concrete examples.
-4. Test your understanding by predicting what happens when one condition changes.
-
-\`\`\`txt
-Strong understanding = definition + example + consequence
-\`\`\`
-
-## Application
-
-The fastest way to deepen comprehension is to apply the concept to a new case, then explain the result in plain language.`,
-  roadmap: `# Learning Roadmap
-
-Treat this material as a sequence. Do not begin with the hardest section; build enough context that the difficult parts have somewhere to attach.
-
-## Step-by-Step Path
-
-1. **Preview the structure:** skim headings, diagrams, formulas, and summaries.
-2. **Learn prerequisites:** define terms that appear more than once.
-3. **Study the central idea:** write the main claim in one sentence.
-4. **Work through examples:** explain each example out loud.
-5. **Check mastery:** create three questions the material should help you answer.
-
-## Mastery Checklist
-
-- I can explain the topic without copying the source.
-- I can identify the most important vocabulary.
-- I can connect examples back to the main idea.
-- I know what to review next.`,
-};
+async function parseErrorMessage(res: Response): Promise<string> {
+  try {
+    const data = await res.json();
+    if (typeof data.error === 'string') return data.error;
+  } catch {
+    // ignore
+  }
+  return 'Something went wrong. Please try again.';
+}
 
 export function StudyChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [mode, setMode] = useState<'summary' | 'detailed' | 'roadmap'>('summary');
   const [phase, setPhase] = useState<AppPhase>('landing');
   const [pasteText, setPasteText] = useState('');
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [streamingIndex, setStreamingIndex] = useState<number | null>(null);
 
-  useEffect(() => {
-    if (phase !== 'analyzing') return;
-    const timer = window.setTimeout(() => setPhase('mode'), 1500);
-    return () => window.clearTimeout(timer);
-  }, [phase]);
+  const material = useStudyStore((state) => state.material);
+  const setMaterial = useStudyStore((state) => state.setMaterial);
 
-  function startAnalysis() {
+  async function handleFileUpload(file: File) {
     setPhase('analyzing');
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await fetch('/api/upload', { method: 'POST', body: formData });
+
+      if (!res.ok) {
+        throw new Error(await parseErrorMessage(res));
+      }
+
+      const data = uploadResponseSchema.parse(await res.json());
+      setMaterial(data.text, data.fileName);
+      setPhase('mode');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to upload file');
+      setPhase('landing');
+    }
   }
 
-  function handleSend(text: string) {
-    setMessages((current) => [
-      ...current,
-      { role: 'user', content: text },
-      { role: 'assistant', content: assistantResponses[mode] },
-    ]);
+  function handlePasteAnalysis() {
+    const text = pasteText.trim();
+    if (!text) return;
+
+    setMaterial(text);
+    setPhase('mode');
+  }
+
+  async function handleSend(text: string) {
+    if (isStreaming || !material.trim()) return;
+
+    const userMessage: ChatMessage = { role: 'user', content: text };
+    const history = [...messages, userMessage];
+    const assistantIndex = history.length;
+
+    setMessages([...history, { role: 'assistant', content: '' }]);
+    setIsStreaming(true);
+    setStreamingIndex(assistantIndex);
+
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode,
+          material,
+          messages: history,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error(await parseErrorMessage(res));
+      }
+
+      if (!res.body) {
+        throw new Error('No response stream received');
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let content = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        content += decoder.decode(value, { stream: true });
+        const nextContent = content;
+
+        setMessages((current) =>
+          current.map((message, index) =>
+            index === assistantIndex ? { ...message, content: nextContent } : message
+          )
+        );
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to get response';
+      toast.error(message);
+      setMessages((current) => {
+        const next = [...current];
+        const assistant = next[assistantIndex];
+        if (assistant?.role === 'assistant' && !assistant.content.trim()) {
+          next.splice(assistantIndex, 1);
+        }
+        return next;
+      });
+    } finally {
+      setIsStreaming(false);
+      setStreamingIndex(null);
+    }
   }
 
   return (
@@ -126,7 +160,7 @@ export function StudyChat() {
           </div>
 
           <div className="space-y-5">
-            <UploadDropzone onUpload={startAnalysis} />
+            <UploadDropzone onUpload={handleFileUpload} />
             <div className="rounded-[8px] border border-[var(--border)] bg-white p-4 sm:p-5">
               <label htmlFor="study-material" className="mb-3 block text-sm font-medium">
                 Or paste your study material
@@ -138,7 +172,7 @@ export function StudyChat() {
                 placeholder="Paste lecture notes, textbook excerpts, research abstracts or assignment material..."
               />
               <div className="mt-4 flex justify-end">
-                <Button type="button" onClick={startAnalysis} disabled={!pasteText.trim()}>
+                <Button type="button" onClick={handlePasteAnalysis} disabled={!pasteText.trim()}>
                   Analyze text
                 </Button>
               </div>
@@ -209,14 +243,18 @@ export function StudyChat() {
                   <EmptyState onSuggestion={handleSend} />
                 ) : (
                   messages.map((message, index) => (
-                    <Message key={`${message.role}-${index}`} message={message} />
+                    <Message
+                      key={`${message.role}-${index}`}
+                      message={message}
+                      isStreaming={isStreaming && streamingIndex === index}
+                    />
                   ))
                 )}
               </div>
             </main>
 
             <div className="fixed inset-x-0 bottom-0 z-20 border-t border-[var(--border)] bg-[var(--background)]/92 px-3 py-3 backdrop-blur sm:px-5 lg:left-72">
-              <ChatInput onSend={handleSend} />
+              <ChatInput onSend={handleSend} disabled={isStreaming} />
             </div>
           </div>
         </motion.div>

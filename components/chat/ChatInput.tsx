@@ -3,14 +3,20 @@ import React, { useState } from 'react';
 import { Paperclip, Send } from 'lucide-react';
 import { Button } from '../ui/Button';
 
-export function ChatInput({ onSend }: { onSend: (text: string) => void }) {
+export function ChatInput({
+  onSend,
+  disabled = false,
+}: {
+  onSend: (text: string) => void;
+  disabled?: boolean;
+}) {
   const [text, setText] = useState('');
 
   return (
     <form
       onSubmit={(e) => {
         e.preventDefault();
-        if (!text.trim()) return;
+        if (disabled || !text.trim()) return;
         onSend(text.trim());
         setText('');
       }}
@@ -30,13 +36,15 @@ export function ChatInput({ onSend }: { onSend: (text: string) => void }) {
       </label>
       <textarea
         id="studyflow-chat-input"
-        className="max-h-36 min-h-11 flex-1 resize-none bg-transparent px-2 py-3 text-sm leading-5 outline-none placeholder:text-[var(--muted)]"
+        className="max-h-36 min-h-11 flex-1 resize-none bg-transparent px-2 py-3 text-sm leading-5 outline-none placeholder:text-[var(--muted)] disabled:opacity-50"
         value={text}
         rows={1}
+        disabled={disabled}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(event) => {
           if (event.key === 'Enter' && !event.shiftKey) {
             event.preventDefault();
+            if (disabled) return;
             const value = text.trim();
             if (!value) return;
             onSend(value);
@@ -45,7 +53,13 @@ export function ChatInput({ onSend }: { onSend: (text: string) => void }) {
         }}
         placeholder="Ask about your study material..."
       />
-      <Button type="submit" variant="primary" aria-label="Send message" className="h-11 w-11 shrink-0 px-0">
+      <Button
+        type="submit"
+        variant="primary"
+        aria-label="Send message"
+        disabled={disabled}
+        className="h-11 w-11 shrink-0 px-0"
+      >
         <Send aria-hidden="true" size={18} />
       </Button>
     </form>

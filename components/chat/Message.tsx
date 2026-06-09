@@ -5,7 +5,13 @@ import ReactMarkdown from 'react-markdown';
 import { motion } from 'framer-motion';
 import { ChatMessage } from '../../lib/types';
 
-export function Message({ message }: { message: ChatMessage }) {
+export function Message({
+  message,
+  isStreaming = false,
+}: {
+  message: ChatMessage;
+  isStreaming?: boolean;
+}) {
   const isUser = message.role === 'user';
   return (
     <motion.div
@@ -21,6 +27,9 @@ export function Message({ message }: { message: ChatMessage }) {
       ) : (
         <article className="study-article w-full">
           <ReactMarkdown>{message.content}</ReactMarkdown>
+          {isStreaming ? (
+            <span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-[var(--primary)] align-text-bottom" />
+          ) : null}
         </article>
       )}
     </motion.div>

@@ -2,16 +2,16 @@ import { create } from 'zustand';
 
 interface StudyState {
   material: string;
-
-  setMaterial: (
-    material: string
-  ) => void;
+  fileName?: string;
+  setMaterial: (material: string, fileName?: string) => void;
+  reset: () => void;
 }
 
-export const useStudyStore =
-  create<StudyState>((set) => ({
-    material: "",
+export const useStudyStore = create<StudyState>((set) => ({
+  material: '',
+  fileName: undefined,
 
-    setMaterial: (material) =>
-      set({ material }),
-  }));
+  setMaterial: (material, fileName) => set({ material, fileName }),
+
+  reset: () => set({ material: '', fileName: undefined }),
+}));
