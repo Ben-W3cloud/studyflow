@@ -59,7 +59,7 @@ export function UploadDropzone({ onUpload }: UploadDropzoneProps) {
       >
         <FileText aria-hidden="true" className="mb-4 text-[var(--muted)]" size={30} />
         <p className="text-sm font-medium">Drop your file here</p>
-        <p className="mt-1 text-sm text-[var(--muted)]">or choose a document from your computer</p>
+        <p className="mt-1 text-sm text-[var(--muted)]">or choose a document from your computer below 20MB</p>
         <Button
           type="button"
           variant="secondary"

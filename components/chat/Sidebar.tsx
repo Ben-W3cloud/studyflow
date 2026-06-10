@@ -30,7 +30,7 @@ export function Sidebar({ mode }: { mode: LearningMode }) {
           Recent Sessions
         </p>
         <div className="mt-3 space-y-2">
-          {['Cell biology notes', 'Research methods', 'Calculus review'].map((item) => (
+          {['Cell biology notes', 'Research methods','Microbiology notes'].map((item) => (
             <div
               key={item}
               className="rounded-[8px] px-3 py-2 text-sm text-[var(--muted)]"

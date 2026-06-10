@@ -1,4 +1,5 @@
 import { MAX_MATERIAL_CHARS } from './constants';
+import { SYSTEM_PROMPT } from './prompts';
 import { prompts } from './prompts';
 import { LearningMode } from './types';
 
@@ -10,11 +11,17 @@ export function truncateMaterial(text: string): string {
 export function buildSystemPrompt(mode: LearningMode, material: string): string {
   const truncated = truncateMaterial(material);
 
-  return `${prompts[mode].trim()}
-
-You are helping a student understand the study material below. Ground all answers in this material. Use clear markdown formatting. If asked about something not covered in the material, say so honestly.
-
---- STUDY MATERIAL ---
-${truncated}
---- END STUDY MATERIAL ---`;
-}
+  return `${SYSTEM_PROMPT}
+    
+  Current Learning Mode:
+  
+  ${prompts[mode].trim()}
+  
+  --- STUDY MATERIAL ---
+  
+  ${truncated}
+  
+  --- END STUDY MATERIAL ---
+  `;
+  }
+  

@@ -147,21 +147,21 @@ export function StudyChat() {
           <div className="mx-auto mb-10 flex w-full max-w-2xl flex-col items-center text-center">
             <div className="mb-6 flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-[8px] bg-[var(--foreground)] text-white">
-                <BookOpen aria-hidden="true" size={20} />
+                <BookOpen aria-hidden="true" size={24} />
               </div>
               <span className="text-xl font-semibold">StudyFlow</span>
             </div>
             <h1 className="max-w-2xl text-4xl font-semibold leading-tight sm:text-5xl">
               Understand Anything Faster
             </h1>
-            <p className="mt-4 max-w-lg text-base leading-7 text-[var(--muted)]">
+            <p className="mt-1 max-w-lg text-base leading-7 text-[var(--muted)]">
               Upload study material and learn it the way your brain prefers.
             </p>
           </div>
 
           <div className="space-y-5">
             <UploadDropzone onUpload={handleFileUpload} />
-            <div className="rounded-[8px] border border-[var(--border)] bg-white p-4 sm:p-5">
+            <div className="rounded-[16px] border border-[var(--border)] bg-white p-4 sm:p-5">
               <label htmlFor="study-material" className="mb-3 block text-sm font-medium">
                 Or paste your study material
               </label>
