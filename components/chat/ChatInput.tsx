@@ -14,6 +14,7 @@ export function ChatInput({
 }) {
   const [text, setText] = useState('');
   const fileRef = useRef<HTMLInputElement | null>(null);
+  const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
 
   return (
     <form
@@ -29,11 +30,20 @@ export function ChatInput({
         ref={fileRef}
         type="file"
         className="hidden"
-        onChange={(e) => {
+        aria-label="Attach file"
+        onChange={async (e) => {
           const file = e.target.files?.[0];
-          if (file && onAttach) onAttach(file);
-          // reset so same file can be selected again
-          if (fileRef.current) fileRef.current.value = '';
+          if (file) {
+            setSelectedFileName(file.name);
+            try {
+              if (onAttach) await onAttach(file as File);
+            } finally {
+              // reset so same file can be selected again
+              if (fileRef.current) fileRef.current.value = '';
+              // clear preview after a short delay
+              setTimeout(() => setSelectedFileName(null), 3000);
+            }
+          }
         }}
       />
 
@@ -45,7 +55,7 @@ export function ChatInput({
         className="shrink-0"
         onClick={() => fileRef.current?.click()}
       >
-        <Paperclip aria-hidden="true" size={18} />
+        <Paperclip aria-hidden="true" size={24} />
       </Button>
       <label htmlFor="studyflow-chat-input" className="sr-only">
         Ask about your study material
@@ -69,15 +79,22 @@ export function ChatInput({
         }}
         placeholder="Ask about your study material..."
       />
-      <Button
-        type="submit"
-        variant="primary"
-        aria-label="Send message"
-        disabled={disabled}
-        className="h-11 w-11 shrink-0 px-0"
-      >
-        <Send aria-hidden="true" size={18} />
-      </Button>
+      <div className="flex items-center gap-2">
+        {selectedFileName ? (
+          <div className="mr-2 rounded-full bg-[var(--background)] px-3 py-1 text-xs text-[var(--muted)]">
+            {selectedFileName}
+          </div>
+        ) : null}
+        <Button
+          type="submit"
+          variant="primary"
+          aria-label="Send message"
+          disabled={disabled}
+          className="h-11 w-11 shrink-0 px-0"
+        >
+          <Send aria-hidden="true" size={24} />
+        </Button>
+      </div>
     </form>
   );
 }

@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { BookOpen } from 'lucide-react';
 import { toast } from 'sonner';
@@ -35,9 +35,19 @@ export function StudyChat() {
   const [pasteText, setPasteText] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingIndex, setStreamingIndex] = useState<number | null>(null);
+  const [lastRequestBytes, setLastRequestBytes] = useState<number | null>(null);
+  const [lastResponseBytes, setLastResponseBytes] = useState<number | null>(null);
+  const abortCtrlRef = useRef<AbortController | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const messagesContainerRef = useRef<HTMLDivElement | null>(null);
 
   const material = useStudyStore((state) => state.material);
   const setMaterial = useStudyStore((state) => state.setMaterial);
+  const sessions = useStudyStore((state) => state.sessions);
+  const saveSession = useStudyStore((state) => state.saveSession);
+  const getSession = useStudyStore((state) => state.getSession);
+  const deleteSession = useStudyStore((state) => state.deleteSession);
+  const togglePin = useStudyStore((state) => state.togglePin);
 
   async function handleFileUpload(file: File) {
     setPhase('analyzing');
@@ -61,6 +71,59 @@ export function StudyChat() {
     }
   }
 
+  function handleSaveSession() {
+    if (!material.trim() && messages.length === 0) {
+      toast.error('Nothing to save');
+      return;
+    }
+
+    const id = saveSession({
+      name: `${new Date().toLocaleString()}`,
+      messages,
+      mode,
+      material,
+      fileName: undefined,
+    });
+
+    toast.success('Session saved');
+    return id;
+  }
+
+  function handleLoadSession(id: string) {
+    const session = getSession(id);
+    if (!session) {
+      toast.error('Session not found');
+      return;
+    }
+
+    setMaterial(session.material, session.fileName);
+    setMode(session.mode);
+    setMessages(session.messages ?? []);
+    setPhase('workspace');
+    toast.success('Session loaded');
+  }
+
+  function handleNewSession() {
+    setMessages([]);
+    setMaterial('');
+    setPhase('landing');
+  }
+
+  function handleOpenSettings() {
+    toast('Settings are not implemented yet');
+  }
+
+  function handlePinSession(id: string) {
+    togglePin(id);
+    toast.success('Toggled pin');
+  }
+
+  function handleDeleteSession(id: string) {
+    if (!confirm('Delete this session?')) return;
+    deleteSession(id);
+    toast.success('Session deleted');
+  }
+
   function handlePasteAnalysis() {
     const text = pasteText.trim();
     if (!text) return;
@@ -71,24 +134,23 @@ export function StudyChat() {
 
   async function handleSend(text: string) {
     if (isStreaming || !material.trim()) return;
-
-    const userMessage: ChatMessage = { role: 'user', content: text };
+    const userMessage: ChatMessage = { id: `${Date.now()}-${Math.random().toString(36).slice(2,8)}`, role: 'user', content: text, timestamp: Date.now(), status: 'done', source: 'user' };
     const history = [...messages, userMessage];
     const assistantIndex = history.length;
-
-    setMessages([...history, { role: 'assistant', content: '' }]);
+    setMessages([...history, { id: `${Date.now()}-${Math.random().toString(36).slice(2,8)}`, role: 'assistant', content: '', timestamp: Date.now(), status: 'streaming' }]);
     setIsStreaming(true);
     setStreamingIndex(assistantIndex);
 
     try {
+      const body = JSON.stringify({ mode, material, messages: history });
+      setLastRequestBytes(body.length);
+      const controller = new AbortController();
+      abortCtrlRef.current = controller;
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          mode,
-          material,
-          messages: history,
-        }),
+        body,
+        signal: controller.signal,
       });
 
       if (!res.ok) {
@@ -102,12 +164,15 @@ export function StudyChat() {
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let content = '';
+      let received = 0;
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
         content += decoder.decode(value, { stream: true });
+        received += value?.length ?? 0;
+        setLastResponseBytes((prev) => (prev ?? 0) + (value?.length ?? 0));
         const nextContent = content;
 
         setMessages((current) =>
@@ -116,22 +181,79 @@ export function StudyChat() {
           )
         );
       }
+      // mark assistant final
+      setMessages((current) => current.map((m, i) => (i === assistantIndex ? { ...m, status: 'done' } : m)));
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to get response';
       toast.error(message);
       setMessages((current) => {
         const next = [...current];
         const assistant = next[assistantIndex];
-        if (assistant?.role === 'assistant' && !assistant.content.trim()) {
-          next.splice(assistantIndex, 1);
+        if (assistant) {
+          next[assistantIndex] = { ...assistant, status: 'error', errorMessage: message };
         }
         return next;
       });
     } finally {
       setIsStreaming(false);
       setStreamingIndex(null);
+      abortCtrlRef.current = null;
     }
   }
+
+  // Stop the current stream if any
+  function handleStop() {
+    if (abortCtrlRef.current) {
+      abortCtrlRef.current.abort();
+      abortCtrlRef.current = null;
+      setIsStreaming(false);
+      setStreamingIndex(null);
+    }
+  }
+
+  // Retry a failed assistant message by resending the user prompt (assumes last user message before assistant)
+  function handleRetry(index: number) {
+    const assistant = messages[index];
+    if (!assistant || assistant.role !== 'assistant') return;
+    // find previous user message
+    const prevUserIndex = messages.slice(0, index).reverse().findIndex((m) => m.role === 'user');
+    const userIdx = prevUserIndex === -1 ? -1 : index - 1 - prevUserIndex;
+    const user = userIdx >= 0 ? messages[userIdx] : null;
+    if (!user) return;
+    // remove failed assistant message
+    setMessages((cur) => cur.filter((_, i) => i !== index));
+    handleSend(user.content);
+  }
+
+  // Auto-scroll to bottom when messages or streaming changes
+  useEffect(() => {
+    // scroll the messagesEndRef into view smoothly
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } else if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+    }
+  }, [messages, isStreaming]);
+
+  // Listen for global stop/retry events emitted by Message component buttons
+  useEffect(() => {
+    const onStop = () => handleStop();
+    const onRetry = (e: Event) => {
+      const detail = (e as CustomEvent)?.detail;
+      const id = detail?.id as string | undefined;
+      if (!id) return;
+      const idx = messages.findIndex((m) => m.id === id);
+      if (idx !== -1) handleRetry(idx);
+    };
+
+    window.addEventListener('studyflow-stop', onStop as EventListener);
+    window.addEventListener('studyflow-retry', onRetry as EventListener);
+
+    return () => {
+      window.removeEventListener('studyflow-stop', onStop as EventListener);
+      window.removeEventListener('studyflow-retry', onRetry as EventListener);
+    };
+  }, [messages]);
 
   return (
     <AnimatePresence mode="wait">
@@ -144,12 +266,12 @@ export function StudyChat() {
           transition={{ duration: 0.22 }}
           className="mx-auto flex min-h-screen w-full max-w-3xl flex-col justify-center px-5 py-10 sm:px-8"
         >
-          <div className="mx-auto mb-10 flex w-full max-w-2xl flex-col items-center text-center">
+            <div className="mx-auto mb-10 flex w-full max-w-2xl flex-col items-center text-center">
             <div className="mb-6 flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-[8px] bg-[var(--foreground)] text-white">
                 <BookOpen aria-hidden="true" size={24} />
               </div>
-              <span className="text-xl font-semibold">StudyFlow</span>
+                <span className="text-2xl font-semibold">StudyFlow</span>
             </div>
             <h1 className="max-w-2xl text-4xl font-semibold leading-tight sm:text-5xl">
               Understand Anything Faster
@@ -159,9 +281,9 @@ export function StudyChat() {
             </p>
           </div>
 
-          <div className="space-y-5">
+          <div className="mt-10 space-y-5">
             <UploadDropzone onUpload={handleFileUpload} />
-            <div className="rounded-[16px] border border-[var(--border)] bg-white p-4 sm:p-5">
+            <div className="rounded-[16px] border border-[var(--border)] bg-white p-3 sm:p-4">
               <label htmlFor="study-material" className="mb-3 block text-sm font-medium">
                 Or paste your study material
               </label>
@@ -223,7 +345,15 @@ export function StudyChat() {
           transition={{ duration: 0.22 }}
           className="min-h-screen lg:flex"
         >
-          <Sidebar mode={mode} />
+          <Sidebar
+            mode={mode}
+            sessions={sessions}
+            onNewSession={handleNewSession}
+            onLoadSession={handleLoadSession}
+            onOpenSettings={handleOpenSettings}
+            onPin={handlePinSession}
+            onDelete={handleDeleteSession}
+          />
           <div className="flex min-h-screen flex-1 flex-col">
             <header className="sticky top-0 z-10 border-b border-[var(--border)] bg-[var(--background)]/95 px-5 py-4 backdrop-blur lg:hidden">
               <div className="flex items-center gap-3">
@@ -238,7 +368,12 @@ export function StudyChat() {
             </header>
 
             <main className="flex-1 px-5 pb-36 pt-8 sm:px-8 lg:pt-12">
-              <div className="mx-auto max-w-[720px] space-y-8">
+              <div ref={messagesContainerRef} className="mx-auto max-w-[720px] space-y-8 overflow-auto">
+                <div className="flex justify-end">
+                  <Button type="button" size="sm" onClick={handleSaveSession}>
+                    Save Session
+                  </Button>
+                </div>
                 {messages.length === 0 ? (
                   <EmptyState onSuggestion={handleSend} />
                 ) : (
@@ -250,11 +385,12 @@ export function StudyChat() {
                     />
                   ))
                 )}
+                <div ref={messagesEndRef} />
               </div>
             </main>
 
             <div className="fixed inset-x-0 bottom-0 z-20 border-t border-[var(--border)] bg-[var(--background)]/92 px-3 py-3 backdrop-blur sm:px-5 lg:left-72">
-              <ChatInput onSend={handleSend} disabled={isStreaming} />
+              <ChatInput onSend={handleSend} onAttach={handleFileUpload} disabled={isStreaming} />
             </div>
           </div>
         </motion.div>

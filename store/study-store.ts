@@ -10,6 +10,7 @@ export interface Session {
   material: string;
   fileName?: string;
   createdAt: number;
+  pinned?: boolean;
 }
 
 interface StudyState {
@@ -19,9 +20,12 @@ interface StudyState {
   setMaterial: (material: string, fileName?: string) => void;
   reset: () => void;
   saveSession: (s: Omit<Session, 'id' | 'createdAt'>) => string;
+  editSession: (id: string, patch: Partial<Omit<Session, 'id' | 'createdAt'>>) => void;
   getSession: (id: string) => Session | undefined;
   deleteSession: (id: string) => void;
   clearSessions: () => void;
+  togglePin: (id: string) => void;
+  renameSession: (id: string, name: string) => void;
 }
 
 export const useStudyStore = create<StudyState>()(
@@ -42,12 +46,30 @@ export const useStudyStore = create<StudyState>()(
         return id;
       },
 
+      editSession: (id, patch) => {
+        set((state) => ({
+          sessions: state.sessions.map((s) => (s.id === id ? { ...s, ...patch } : s)),
+        }));
+      },
+
       getSession: (id) => {
         return get().sessions.find((s) => s.id === id);
       },
 
       deleteSession: (id) => {
         set((state) => ({ sessions: state.sessions.filter((s) => s.id !== id) }));
+      },
+
+      togglePin: (id) => {
+        set((state) => ({
+          sessions: state.sessions.map((s) => (s.id === id ? { ...s, pinned: !s.pinned } : s)),
+        }));
+      },
+
+      renameSession: (id, name) => {
+        set((state) => ({
+          sessions: state.sessions.map((s) => (s.id === id ? { ...s, name } : s)),
+        }));
       },
 
       clearSessions: () => set({ sessions: [] }),

@@ -5,3 +5,7 @@ export const MAX_PDF_SIZE = 20 * 1024 * 1024;
 export const MAX_MATERIAL_CHARS = 120_000;
 
 export const GROQ_MODEL = 'llama-3.3-70b-versatile';
+
+// Chunking configuration for large materials
+export const CHAT_CHUNK_MAX_CHARS = 30_000;
+export const CHAT_CHUNK_OVERLAP = 2_000;
