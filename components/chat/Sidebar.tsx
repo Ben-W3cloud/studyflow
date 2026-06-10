@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import { BookOpen, Plus, Settings, Pin, Trash2 } from 'lucide-react';
+import { BookOpen, Plus, Settings, Pin, Trash2, X } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { LearningMode } from '../../lib/types';
 import { Session } from '../../store/study-store';
@@ -20,6 +20,7 @@ export function Sidebar({
   onPin,
   onDelete,
   onOpenSettings,
+  onClose,
 }: {
   mode: LearningMode;
   sessions?: Session[];
@@ -28,15 +29,31 @@ export function Sidebar({
   onPin?: (id: string) => void;
   onDelete?: (id: string) => void;
   onOpenSettings?: () => void;
+  onClose?: () => void;
 }) {
   const [q, setQ] = React.useState('');
+  // If `onClose` is provided, render a mobile-friendly drawer (fixed) so it can be used as an overlay.
+  const baseClass = onClose
+    ? 'fixed inset-y-0 left-0 z-50 w-72 shrink-0 border-r border-[var(--border)] bg-[#f7f3ee] px-5 py-6 lg:static lg:flex lg:flex-col'
+    : 'hidden min-h-screen w-72 shrink-0 border-r border-[var(--border)] bg-[#f7f3ee] px-5 py-6 lg:flex lg:flex-col';
+
   return (
-    <aside className="hidden min-h-screen w-72 shrink-0 border-r border-[var(--border)] bg-[#f7f3ee] px-5 py-6 lg:flex lg:flex-col">
+    <aside className={baseClass} role="navigation" aria-label="StudyFlow sidebar">
       <div className="flex items-center gap-3">
         <div className="flex h-9 w-9 items-center justify-center rounded-[8px] bg-[var(--foreground)] text-white">
           <BookOpen aria-hidden="true" size={18} />
         </div>
         <span className="text-lg font-semibold">StudyFlow</span>
+        {onClose ? (
+          <button
+            type="button"
+            aria-label="Close sidebar"
+            onClick={onClose}
+            className="ml-auto -mr-2 rounded p-1 text-[var(--muted)] hover:bg-white lg:hidden"
+          >
+            <X size={16} />
+          </button>
+        ) : null}
       </div>
 
       <Button type="button" variant="secondary" className="mt-8 w-full justify-start" onClick={onNewSession}>

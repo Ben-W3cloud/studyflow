@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { BookOpen } from 'lucide-react';
+import { BookOpen, Menu } from 'lucide-react';
 import { toast } from 'sonner';
 import { ChatMessage } from '../../lib/types';
 import { uploadResponseSchema } from '../../lib/validation';
@@ -40,6 +40,7 @@ export function StudyChat() {
   const abortCtrlRef = useRef<AbortController | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
+  const [showSidebarMobile, setShowSidebarMobile] = useState(false);
 
   const material = useStudyStore((state) => state.material);
   const setMaterial = useStudyStore((state) => state.setMaterial);
@@ -354,9 +355,32 @@ export function StudyChat() {
             onPin={handlePinSession}
             onDelete={handleDeleteSession}
           />
+          {showSidebarMobile ? (
+            <div className="fixed inset-0 z-50 lg:hidden">
+              <div className="absolute inset-0 bg-black/40" onClick={() => setShowSidebarMobile(false)} />
+              <Sidebar
+                mode={mode}
+                sessions={sessions}
+                onNewSession={handleNewSession}
+                onLoadSession={handleLoadSession}
+                onOpenSettings={handleOpenSettings}
+                onPin={handlePinSession}
+                onDelete={handleDeleteSession}
+                onClose={() => setShowSidebarMobile(false)}
+              />
+            </div>
+          ) : null}
           <div className="flex min-h-screen flex-1 flex-col">
             <header className="sticky top-0 z-10 border-b border-[var(--border)] bg-[var(--background)]/95 px-5 py-4 backdrop-blur lg:hidden">
               <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  aria-label="Open sidebar"
+                  onClick={() => setShowSidebarMobile(true)}
+                  className="mr-2 inline-flex items-center rounded p-2 text-[var(--muted)]"
+                >
+                  <Menu size={18} />
+                </button>
                 <div className="flex h-9 w-9 items-center justify-center rounded-[8px] bg-[var(--foreground)] text-white">
                   <BookOpen aria-hidden="true" size={18} />
                 </div>
