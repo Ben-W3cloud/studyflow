@@ -60,7 +60,7 @@ export function Message({
                 {message.status === 'error' ? (
                   <span className="flex items-center gap-2">
                     <span className="text-xs text-red-600">Error</span>
-                    <Button size="sm" variant="outline" onClick={() => window.dispatchEvent(new CustomEvent('studyflow-retry', { detail: { id: message.id } }))}>
+                    <Button size="sm" variant="ghost" onClick={() => window.dispatchEvent(new CustomEvent('studyflow-retry', { detail: { id: message.id } }))}>
                       <RefreshCw size={14} /> Retry
                     </Button>
                   </span>
