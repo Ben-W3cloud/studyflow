@@ -1,4 +1,5 @@
 import { MAX_PDF_SIZE } from '../../../lib/constants';
+import { isRateLimited } from '../../../lib/rateLimiter';
 
 export const runtime = 'nodejs';
 
@@ -11,7 +12,7 @@ function getExtension(fileName: string): string {
 }
 
 function isPdf(file: File, ext: string): boolean {
-  return ext === '.pdf' || file.type === 'application/pdf';
+  return PDF_EXTENSIONS.has(ext) || file.type === 'application/pdf';
 }
 
 function isTextFile(file: File, ext: string): boolean {
@@ -40,6 +41,10 @@ async function extractText(file: File, ext: string): Promise<string> {
 
 export async function POST(req: Request) {
   try {
+    const key = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
+    if (isRateLimited(key)) {
+      return Response.json({ error: 'Too many requests' }, { status: 429 });
+    }
     const formData = await req.formData();
     const file = formData.get('file');
 

@@ -1,16 +1,19 @@
 "use client";
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Paperclip, Send } from 'lucide-react';
 import { Button } from '../ui/Button';
 
 export function ChatInput({
   onSend,
+  onAttach,
   disabled = false,
 }: {
   onSend: (text: string) => void;
+  onAttach?: (file: File) => void;
   disabled?: boolean;
 }) {
   const [text, setText] = useState('');
+  const fileRef = useRef<HTMLInputElement | null>(null);
 
   return (
     <form
@@ -22,12 +25,25 @@ export function ChatInput({
       }}
       className="mx-auto flex w-full max-w-[760px] items-end gap-2 rounded-[28px] border border-[var(--border)] bg-white p-2 shadow-lg shadow-stone-200/70"
     >
+      <input
+        ref={fileRef}
+        type="file"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file && onAttach) onAttach(file);
+          // reset so same file can be selected again
+          if (fileRef.current) fileRef.current.value = '';
+        }}
+      />
+
       <Button
         type="button"
         variant="icon"
         aria-label="Attach material"
         title="Attach material"
         className="shrink-0"
+        onClick={() => fileRef.current?.click()}
       >
         <Paperclip aria-hidden="true" size={18} />
       </Button>

@@ -2,11 +2,16 @@ import { buildSystemPrompt } from '../../../lib/chat';
 import { GROQ_MODEL } from '../../../lib/constants';
 import { groq } from '../../../lib/groq';
 import { chatRequestSchema } from '../../../lib/validation';
+import { isRateLimited } from '../../../lib/rateLimiter';
 
 export const runtime = 'nodejs';
 
 export async function POST(req: Request) {
   try {
+    const key = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
+    if (isRateLimited(key)) {
+      return Response.json({ error: 'Too many requests' }, { status: 429 });
+    }
     if (!process.env.GROQ_API_KEY) {
       return Response.json({ error: 'Server is not configured for AI chat' }, { status: 500 });
     }

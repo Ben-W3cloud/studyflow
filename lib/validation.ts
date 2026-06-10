@@ -15,7 +15,7 @@ export const chatRequestSchema = z.object({
 
 export const uploadResponseSchema = z.object({
   text: z.string(),
-  fileName: z.string(),
+  fileName: z.string().optional(),
 });
 
 export type ChatRequest = z.infer<typeof chatRequestSchema>;
